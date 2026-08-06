@@ -1,0 +1,8 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+
+# Local project notes, never public
+CLAUDE.md
