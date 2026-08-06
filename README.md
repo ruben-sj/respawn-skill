@@ -1,5 +1,7 @@
 # respawn-skill
 
+> **⚠️ Beta — freshly published, not yet battle-tested.** This repo was just cut from a working draft and hasn't seen real-world use in this form yet. Expect rough edges; give it a week or two of actual use before trusting it for anything important. This notice will be removed once it's held up in practice.
+
 An experimental, community-made [Claude Code](https://claude.com/claude-code) skill that tries to auto-resume a session after it gets blocked by Claude's usage limit — it waits for the window to reopen, notifies you, and continues the interrupted work unless you cancel within 5 minutes.
 
 **This is not an official Anthropic feature.** Auto-resume after a rate limit is an open, unimplemented feature request (see GitHub issues `anthropics/claude-code` #26775 and #36320). This skill is a best-effort workaround built on scheduling tools (`CronCreate`/`CronDelete`/`PushNotification`) available in the harness — it has not been extensively verified in production and may stop working if those tools change behavior.
