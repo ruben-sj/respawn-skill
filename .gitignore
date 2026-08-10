@@ -6,3 +6,6 @@ Desktop.ini
 
 # Local project notes, never public
 CLAUDE.md
+
+# Session-local notes, never public
+.remember/
