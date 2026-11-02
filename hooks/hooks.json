@@ -1,0 +1,17 @@
+{
+  "description": "respawn usage hook: adds a short usage note when an armed respawn run crosses its warning or stop level. Silent otherwise.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/respawn-usage-hook.js"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

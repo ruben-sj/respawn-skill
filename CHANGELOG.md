@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0 - unreleased
+
+Optional hook layer and plugin packaging. Everything is opt-in; without the plugin or hook, respawn behaves exactly as in v0.3.0. Added:
+- Plugin packaging: `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, so `/plugin marketplace add ruben-sj/respawn-skill` and `/plugin install respawn@respawn-skill` work. The plugin points at `skill/SKILL.md` in place (no copy), so existing curl installs keep working.
+- Usage tap `scripts/respawn-tap.js`: a dependency-free Node `statusLine` wrapper that atomically writes `{ts, session_id, five_hour, seven_day}` to `~/.claude/respawn-usage.json` and pipes the input to the user's existing status line command. Manual opt-in (plugins cannot set `statusLine`).
+- Usage hook `scripts/respawn-usage-hook.js` (a `PostToolUse` hook in `hooks/hooks.json`): silent unless a respawn run is armed in the session, and then adds one short informational note each time the 5-hour percent crosses `stop - 15` and `stop` (or a weekly window reaches 98 %), only from a fresh same-session cache.
+- Armed marker: the skill writes `~/.claude/respawn-armed/<session id>` (`stop=<S>`) when it arms and deletes it when the run ends; markers not rewritten for 24 hours are ignored. `skill/SKILL.md` gains a short section on the marker and a rule that a hook note counts as a checkpoint reading.
+- Tests: `node --test test/*.test.js` (tap and hook, with fixture data).
+- Known: the desktop app's Code tab was not observed to run status line commands, so the hook layer most likely works only in the terminal CLI. The tap and hook have been tested on fixtures, not yet in a live session.
+
 ## v0.3.0 - 2026-11-02
 
 Uses live usage readings where the Claude desktop app provides them (`mcp__ccd_session_mgmt__get_usage`). When that tool is missing, reports `unavailable` / `not_applicable`, or has no 5-hour window, respawn keeps the v0.2.0 flow, plus the off-minute timing margin, silent-cutoff detection, re-arming before resuming, and re-invocation replacing an old run. Added:

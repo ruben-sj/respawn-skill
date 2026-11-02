@@ -1,6 +1,6 @@
 ---
 name: respawn
-description: Sets up automatic revival of this session after Claude's 5-hour usage limit is hit. It waits until the window reopens, notifies the user, and resumes automatically unless the user cancels within a configurable grace window (default 5 min). It can also pause itself at a usage threshold (soft stop) and uses live usage readings for timing when the Claude desktop app provides them. Use when the user says "respawn", "set up respawn", "auto-resume", "revive this session", or wants to avoid having to remember to come back after a rate-limit cutoff. MUST be invoked proactively, BEFORE the account is actually blocked; does not work reactively after a cutoff. v0.3.0; the v0.2 core is field-tested through multiple overnight multi-window multi-session runs, the v0.3 additions less so; not an officially supported Anthropic feature.
+description: Sets up automatic revival of this session after Claude's 5-hour usage limit is hit. It waits until the window reopens, notifies the user, and resumes automatically unless the user cancels within a configurable grace window (default 5 min). It can also pause itself at a usage threshold (soft stop) and uses live usage readings for timing when the Claude desktop app provides them. Use when the user says "respawn", "set up respawn", "auto-resume", "revive this session", or wants to avoid having to remember to come back after a rate-limit cutoff. MUST be invoked proactively, BEFORE the account is actually blocked; does not work reactively after a cutoff. v0.4.0; the v0.2 core is field-tested through multiple overnight multi-window multi-session runs, the v0.3 and v0.4 additions less so; not an officially supported Anthropic feature.
 ---
 
 # respawn
@@ -88,7 +88,7 @@ Keep track of the job IDs you create (the setup-complete message lists them) so 
 
 `/respawn` here refers to whatever phrase triggers this skill (see the trigger phrases in the frontmatter `description` above). It is not necessarily a registered slash command; treat it as shorthand for "when this skill fires." If this skill was loaded from inside a respawn job (step 4 of the template), skip this section.
 
-**Re-invocation:** if a respawn run is already armed in this session (job IDs listed earlier in the conversation, or jobs with the `respawn-state:` prefix in `CronList`), delete all of its jobs first and tell the user the new settings replace the old run. Never keep two runs side by side.
+**Re-invocation:** if a respawn run is already armed in this session (job IDs listed earlier in the conversation, or jobs with the `respawn-state:` prefix in `CronList`), delete all of its jobs and its armed marker first and tell the user the new settings replace the old run. Never keep two runs side by side.
 
 **Shorthand arguments:** if invoked with arguments (e.g. `/respawn 3`, `/respawn 22:15`, `/respawn 3 22:15 cancel=10`, `/respawn nocancel`, `/respawn stop=70`), parse instead of asking conversationally:
 - A bare integer token → `windows` (`0` = indefinite).
@@ -116,7 +116,8 @@ Steps:
    - **`usage=off` and a reset time is known** (given by the user, or auto-computed as now + 5 hours for a later window; see the re-arm step of the follow-up), classic timed path: first job is ONE-TIME (`recurring: false`), scheduled at the reset time plus the margin from "Safe timing", with `kind=timed backstop=none`. The known reset time replaces the blind 30-minute cadence for the first check, since the harness can't read a live reset time from inside a blocked job itself. Safety net if the estimate was off: if this job fires and finds no unhandled cutoff, it schedules one more ONE-TIME recheck 15 minutes later (`kind=recheck`); if *that* also finds nothing, it falls through to the blind 30-minute recurring poll.
    - **`usage=off` and no reset time known** (classic blind path): `recurring: true`, `cron`: every 30 minutes, offset from the hour/half-hour, e.g. `"13,43 * * * *"`, `kind=poll backstop=none`.
 4. Note the job ID(s) from the response (needed for `CronDelete` later).
-5. Briefly confirm it's set up (see **Setup-complete message** below).
+5. Write the armed marker if it applies (see "Hook messages and the armed marker").
+6. Briefly confirm it's set up (see **Setup-complete message** below).
 
 **Activation message**: cover these points, adapted to the user's language and phrasing, not a literal script:
 > Setting up respawn: I'll watch for the usage-limit cutoff and auto-resume once the window reopens ([windows] window(s), [cancel_window]-min cancel grace / no cancel grace). [Usage mode: current usage is [P]% of the 5-hour limit (resets around HH:MM local) and [W]% of the weekly limit(s) where readable; soft stop at [N]% (account-wide percent) unless disabled. | Classic mode: usage readings are not available here, so I'll fall back to the reset time you give me or a 30-minute poll, and the soft stop is off.] [First time only: one-line limitations summary: requires this session to stay open, unofficial workaround, see full list if asked.]
@@ -126,11 +127,11 @@ Steps:
 
 ## Soft stop
 
-Only in usage mode (`usage=on`) with `stop` not `off`. Without usage readings the `stop` argument is ignored; say so in the setup-complete message instead of silently dropping it.
+Only in usage mode (`usage=on`) with `stop` not `off`. Without usage readings the `stop` argument is ignored, unless hook messages supply them (see "Hook messages and the armed marker"); say so in the setup-complete message instead of silently dropping it.
 
 **The point:** instead of running into the hard cutoff mid-step, pause deliberately at a threshold, at a clean place in the work. Important caveats to tell the user if they ask: the percent is account-wide (other sessions and scheduled tasks share it), a single big step can overshoot the threshold, so `stop=N` with N close to 100 behaves almost like classic respawn (run until the wall, then resume), which remains the fallback, and a pause uses up one of the covered `windows`.
 
-**Checkpoints.** While respawn is armed, read usage at natural checkpoints: between steps of the work, and before starting a large fan-out (a Workflow, or several subagents at once). Not after every tool call. Take the 5-hour `percentUsed` (call it P); also apply the weekly cap check from "Choosing the target time" (a weekly window at 98 or more counts as the stop tier regardless of N, with the weekly reset as the target).
+**Checkpoints.** While respawn is armed, read usage at natural checkpoints: between steps of the work, and before starting a large fan-out (a Workflow, or several subagents at once). Not after every tool call. A message from the optional usage hook counts as a checkpoint reading too. Take the 5-hour `percentUsed` (call it P); also apply the weekly cap check from "Choosing the target time" (a weekly window at 98 or more counts as the stop tier regardless of N, with the weekly reset as the target).
 
 Tiers, with N = `stop`:
 - **P below N - 15:** carry on normally.
@@ -145,6 +146,15 @@ Tiers, with N = `stop`:
 - If the user explicitly tells you to keep going past the stop level, or continues the work themselves during the pause, delete the pause one-shot, write `respawn log: soft stop superseded`, and do not stop again until the next window. A note followed by that log line is no longer waiting and is not a cutoff.
 
 A soft-stop pause counts as one covered window: it is resumed through the same flow as a hard cutoff, including the cancel window and the `windows` decrement. Once the last covered window has been resumed and the run's jobs are deleted, respawn is no longer armed and there are no more soft-stop checkpoints.
+
+## Hook messages and the armed marker
+
+Optional. A hook shipped in this repo's plugin (see the README) can watch a statusline usage reading for you in the terminal CLI. It acts only while a marker file exists for this session. Everything in this skill works without it.
+
+- **Your session ID:** `${CLAUDE_SESSION_ID}`. If that shows a literal dollar sign and braces instead of an ID, skip the marker.
+- **Arm:** when respawn is armed with a soft stop (`stop` is a number; in classic mode only when the user gave `stop=N` explicitly), write a file named after the session ID in `.claude/respawn-armed/` under the user's home folder (create the folder if needed). It holds one line: `stop=<S>`. Write it after the jobs exist, and rewrite it on every re-arm (that resets the hook's once-per-crossing memory). If writing fails, carry on without it.
+- **Disarm:** delete that file whenever the run ends: cancel, the last covered window resumed, or re-invocation (before the new marker is written). Best effort; the hook ignores a marker not rewritten for 24 hours.
+- **A hook message counts as a checkpoint reading.** A message starting `Usage note from the respawn hook` gives the 5-hour percent P and its reset time. Apply the tiers in "Soft stop" to it. In classic mode it is the only reading there is: for a stop-tier pause use its reset time as the raw target (now + 5 hours if it names none). The hook speaks once per crossing, so a quiet hook means nothing; keep taking checkpoint readings yourself where `mcp__ccd_session_mgmt__get_usage` exists.
 
 ## On each check firing
 
@@ -164,11 +174,11 @@ Confirmed by repeated use: if the account is still blocked by the usage limit wh
 (Reached from a `kind=followup` job, or from the lost-follow-up rule.)
 
 1. If the conversation already shows this cutoff was resumed, cancelled, or already re-armed or cleaned up (step 3 below ran for it), do nothing. Otherwise check whether the user has replied CANCEL (or similar: "stop", "cancel", "no") in the conversation since the notification was sent.
-2. **Cancelled:** briefly confirm it was stopped. Delete every job of this run that is still live (backstop, pending one-shots), so no jobs are left running.
+2. **Cancelled:** briefly confirm it was stopped. Delete every job of this run that is still live (backstop, pending one-shots), so no jobs are left running, and delete the armed marker.
 3. **Not cancelled: re-arm or clean up FIRST, before resuming the work.** The resumed work can be long and can itself hit the next wall or a soft stop; the run's jobs must already reflect the new state by then, otherwise a stale backstop (still carrying the old `windows` value) would cover more windows than requested and a soft stop would build its one-shot from stale state. Create the new jobs first and delete the old ones after, so a failed `CronCreate` never leaves the run unarmed (report any create failure to the user):
-   - If `windows` (carried in this job's prompt) is `1`, this was the last covered cutoff: create no new jobs, delete every other job of this run (the backstop or poll and any pending one-shot, via `CronList` or the conversation), and note that respawn is now disarmed (no more soft-stop checkpoints).
+   - If `windows` (carried in this job's prompt) is `1`, this was the last covered cutoff: create no new jobs, delete every other job of this run (the backstop or poll and any pending one-shot, via `CronList` or the conversation), delete the armed marker, and note that respawn is now disarmed (no more soft-stop checkpoints).
    - If `windows` is `0` (indefinite) or `>1`, re-arm for the next possible cutoff: decrement `windows` by 1 (leave `0` as `0`), then
-     - **usage mode:** take a fresh reading, run "Choosing the target time" (this applies the weekly cap and falls back to now + 5 hours), and redo "On invocation" step 3 for usage mode: a new backstop, then a new timed one-shot with `backstop=<new ID>`, both carrying the new `windows` and the same `cancel_window` and `stop`. Then delete every other job of this run (the old backstop by the ID in the state line, and any other pending one-shot). Write the new reset time into the conversation (it is the recorded reset time signal (b) relies on).
+     - **usage mode:** take a fresh reading, run "Choosing the target time" (this applies the weekly cap and falls back to now + 5 hours), and redo "On invocation" step 3 for usage mode: a new backstop, then a new timed one-shot with `backstop=<new ID>`, both carrying the new `windows` and the same `cancel_window` and `stop`. Then delete every other job of this run (the old backstop by the ID in the state line, and any other pending one-shot). Write the new reset time into the conversation (it is the recorded reset time signal (b) relies on), and rewrite the armed marker.
      - **classic mode:** the next reset time is *now (resume time) + 5 hours*; redo "On invocation" step 3 using the classic timed path with that computed time, carrying the same `cancel_window` value forward, then delete every other job of this run (the old poll and any other pending one-shot). This is the same 5-hour rolling window, so the estimate is as good as one the user would have given, with no need to ask them again.
 
    Do this quietly, with no need to re-confirm with the user unless something about the setup changed (say so if the target switched to a weekly reset).

@@ -1,0 +1,12 @@
+{
+  "name": "respawn-skill",
+  "description": "The respawn skill: auto-resume a Claude Code session after the 5-hour usage limit.",
+  "owner": { "name": "ruben-sj" },
+  "plugins": [
+    {
+      "name": "respawn",
+      "source": "./",
+      "description": "Auto-resume a Claude Code session after the 5-hour usage limit, with an optional usage hook for the terminal CLI."
+    }
+  ]
+}
