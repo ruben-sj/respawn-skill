@@ -130,7 +130,7 @@ Setup:
    }
    ```
 
-Limits: `rate_limits` appears in the status line input only for subscription plans (not API-key use) and only after the first API response in a session, so the cache can be empty early on. The cache holds only the session id, a timestamp and usage percentages, and files older than 8 days are pruned. The hook skips tool calls made inside subagents. If the tap itself is stopped, it stops the inner command with it. On macOS and Linux the inner command runs without a controlling terminal, so tricks like `stty size </dev/tty` for width detection will not work there; read `COLUMNS` or the JSON input instead.
+Limits: `rate_limits` appears in the status line input only for subscription plans (not API-key use) and only after the first API response in a session, so the cache can be empty early on. Respawn checks for the cache only when it arms, so arm it after the session's first reply; if you arm it as the very first message, it reports that no hook layer was found, and invoking it again later enables the soft stop. The cache holds only the session id, a timestamp and usage percentages, and files older than 8 days are pruned. The hook skips tool calls made inside subagents. If the tap itself is stopped, it stops the inner command with it. On macOS and Linux the inner command runs without a controlling terminal, so tricks like `stty size </dev/tty` for width detection will not work there; read `COLUMNS` or the JSON input instead.
 
 ## Compared to the built-in auto-continue
 
