@@ -173,3 +173,23 @@ test('pruneOld removes cache files older than 8 days and keeps recent ones', () 
   assert.equal(fs.existsSync(oldFile), false);
   assert.equal(fs.existsSync(newFile), true);
 });
+
+test('SIGTERM to the tap takes the inner command tree down with it (POSIX only)', { skip: process.platform === 'win32' }, async () => {
+  const { spawn } = require('child_process');
+  const dir = tmpDir();
+  const pidFile = path.join(dir, 'inner.pid');
+  const inner = path.join(dir, 'inner.js');
+  fs.writeFileSync(inner, `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60000);`);
+  const child = spawn(process.execPath, [TAP, `"${process.execPath}" "${inner}"`], { env: { ...process.env, RESPAWN_CLAUDE_DIR: dir } });
+  child.stdin.end(FIXTURE);
+  const exited = new Promise((resolve) => child.on('close', resolve));
+  for (let i = 0; i < 50 && !fs.existsSync(pidFile); i++) await new Promise((r) => setTimeout(r, 100));
+  const innerPid = Number(fs.readFileSync(pidFile, 'utf8'));
+  child.kill('SIGTERM');
+  await exited;
+  let alive = true;
+  for (let i = 0; i < 30 && alive; i++) {
+    try { process.kill(innerPid, 0); await new Promise((r) => setTimeout(r, 100)); } catch (_) { alive = false; }
+  }
+  assert.equal(alive, false);
+});

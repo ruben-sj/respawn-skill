@@ -14,7 +14,7 @@ const os = require('os');
 const path = require('path');
 
 const CACHE_MAX_AGE_S = 10 * 60; // older readings are ignored
-const MARKER_MAX_AGE_S = 8 * 24 * 60 * 60; // recurring cron jobs expire after 7 days
+const PRUNE_AGE_S = 30 * 24 * 60 * 60; // other sessions' leftovers older than this are removed
 const WARN_MARGIN = 15; // warning tier starts at stop - 15, as in the skill
 const WEEKLY_STOP = 98; // weekly percent that counts as the stop tier, as in the skill
 
@@ -38,13 +38,20 @@ function decodeText(buf) {
   return buf.toString(utf16 ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
 }
 
-// The marker holds one line, "stop=<1-100|off>". Returns the stop level, or
-// null when the run has no soft stop (or the text is not that line at all).
-function parseStop(text) {
+// The marker holds one line, "stop=<1-100|off>". Returns the stop level, 'off',
+// or null when the text is not that line at all.
+function parseMarker(text) {
   const m = /^\s*stop\s*=\s*(\d{1,3}|off)\s*$/i.exec(text);
-  if (!m || m[1].toLowerCase() === 'off') return null;
+  if (!m) return null;
+  if (m[1].toLowerCase() === 'off') return 'off';
   const n = Number(m[1]);
   return n >= 1 && n <= 100 ? n : null;
+}
+
+// The stop level as a number, or null (no soft stop, or not a marker line).
+function parseStop(text) {
+  const v = parseMarker(text);
+  return typeof v === 'number' ? v : null;
 }
 
 function two(n) { return String(n).padStart(2, '0'); }
@@ -90,17 +97,18 @@ function evaluate({ sessionId, dir, nowS }) {
 
   let st = null;
   try { st = fs.statSync(markerFile); } catch (_) { /* not armed */ }
-  if (st && nowS - st.mtimeMs / 1000 > MARKER_MAX_AGE_S) {
-    removeQuietly(markerFile);
-    st = null;
-  }
   if (!st || !st.isFile()) {
     for (const f of listFlags(armedDir, id)) removeQuietly(path.join(armedDir, f));
     return null;
   }
 
   let stop = null;
-  try { stop = parseStop(decodeText(fs.readFileSync(markerFile))); } catch (_) { /* unreadable */ }
+  try { stop = parseMarker(decodeText(fs.readFileSync(markerFile))); } catch (_) { /* unreadable */ }
+  if (stop === 'off') { // the skill's way of disarming: clean up after it
+    removeQuietly(markerFile);
+    for (const f of listFlags(armedDir, id)) removeQuietly(path.join(armedDir, f));
+    return null;
+  }
   if (stop === null) return null;
 
   // Flags from an earlier arming of this session belong to another marker mtime.
@@ -135,7 +143,7 @@ function evaluate({ sessionId, dir, nowS }) {
   if (!claimed) return null;
 
   const head = 'Usage note from the respawn hook (statusline reading from the last few minutes):';
-  const tail = ` If no respawn-state job exists in this session, respawn is not armed: delete the marker file ${markerFile} and ignore this note.`;
+  const tail = ' This only applies if a respawn run is armed in this session (scheduled jobs whose prompt starts with respawn-state:); otherwise it can be ignored.';
   if (tier === 3) {
     const when = week.resets_at !== null ? `It resets at ${localStamp(week.resets_at, nowS)} local time.` : 'No reset time was given.';
     const fiveText = five ? ` The 5-hour window is at ${five.pct}%.` : '';
@@ -146,6 +154,17 @@ function evaluate({ sessionId, dir, nowS }) {
     return `${head} the 5-hour window is at ${five.pct}%${reset}. The respawn soft-stop level for this session is ${stop}%, so usage is at the stop tier.${tail}`;
   }
   return `${head} the 5-hour window is at ${five.pct}%${reset}. The respawn soft-stop level for this session is ${stop}%, so usage is in the warning range that starts at ${warnAt}%.${tail}`;
+}
+
+// Best effort: remove other sessions' markers and flag files nobody touched for 30 days.
+function pruneOthers(armedDir, id, nowS) {
+  let names;
+  try { names = fs.readdirSync(armedDir); } catch (_) { return; }
+  for (const f of names) {
+    if (f === id || f.startsWith(`${id}.`)) continue;
+    const file = path.join(armedDir, f);
+    try { if (nowS - fs.statSync(file).mtimeMs / 1000 > PRUNE_AGE_S) fs.unlinkSync(file); } catch (_) { /* skip */ }
+  }
 }
 
 function readStdin() {
@@ -163,7 +182,10 @@ async function main() {
   // Subagents share the parent's session id; stay out of their tool calls so
   // the note is not spent where the main agent cannot see it.
   if (input && input.agent_id) return;
-  const note = evaluate({ sessionId: input && input.session_id, dir: claudeDir(), nowS: Date.now() / 1000 });
+  const nowS = Date.now() / 1000;
+  const note = evaluate({ sessionId: input && input.session_id, dir: claudeDir(), nowS });
+  const id = safeId(input && input.session_id);
+  if (id) pruneOthers(path.join(claudeDir(), 'respawn-armed'), id, nowS);
   if (note) {
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: note } }) + '\n');
   }
@@ -173,4 +195,4 @@ if (require.main === module) {
   main().catch(() => {});
 }
 
-module.exports = { evaluate, parseStop, decodeText, safeId };
+module.exports = { evaluate, parseStop, parseMarker, decodeText, safeId, pruneOthers };

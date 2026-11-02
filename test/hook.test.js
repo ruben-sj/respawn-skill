@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
-const { evaluate, parseStop, decodeText } = require('../scripts/respawn-usage-hook.js');
+const { evaluate, parseStop, parseMarker, decodeText, pruneOthers } = require('../scripts/respawn-usage-hook.js');
 const { SESSION, NOW_S, tmpDir, writeCache, arm, five, weekly } = require('./helpers.js');
 
 const HOOK = path.join(__dirname, '..', 'scripts', 'respawn-usage-hook.js');
@@ -54,28 +54,60 @@ test('silent when the marker is for another session', () => {
   assert.equal(run(dir), null);
 });
 
-test('silent when the armed run has stop=off or a malformed marker', () => {
+test('silent on a malformed marker, which is left alone', () => {
   const dir = tmpDir();
   writeCache(dir, { five_hour: five(99) });
-  for (const text of ['stop=off\n', 'stop=85 and more\n', '']) {
-    arm(dir, text);
+  for (const text of ['stop=85 and more\n', '']) {
+    const marker = arm(dir, text);
     assert.equal(run(dir), null, text);
+    assert.equal(fs.existsSync(marker), true);
   }
 });
 
-test('a stale marker (older than 8 days) is ignored and removed', () => {
+test('a stop=off marker is inert and the hook removes it and its flags', () => {
   const dir = tmpDir();
-  const marker = arm(dir, 'stop=85\n', SESSION, 8 * 86400 + 60);
-  writeCache(dir, { five_hour: five(99) });
-  assert.equal(run(dir), null);
-  assert.equal(fs.existsSync(marker), false);
-});
-
-test('a marker a few days old still works', () => {
-  const dir = tmpDir();
-  arm(dir, 'stop=85\n', SESSION, 6 * 86400);
+  const marker = arm(dir);
   writeCache(dir, { five_hour: five(90) });
   assert.match(run(dir), /stop tier/);
+  assert.ok(flags(dir).length > 0);
+  fs.writeFileSync(marker, 'stop=off\n'); // what the skill writes to disarm
+  assert.equal(run(dir), null);
+  assert.equal(fs.existsSync(marker), false);
+  assert.deepEqual(flags(dir), []);
+});
+
+test('parseMarker tells off from a number from junk', () => {
+  assert.equal(parseMarker('stop=off\n'), 'off');
+  assert.equal(parseMarker('stop=85'), 85);
+  assert.equal(parseMarker('nope'), null);
+});
+
+test("the session's own marker has no expiry", () => {
+  const dir = tmpDir();
+  const marker = arm(dir, 'stop=85\n', SESSION, 40 * 86400);
+  writeCache(dir, { five_hour: five(90) });
+  assert.match(run(dir), /stop tier/);
+  assert.equal(fs.existsSync(marker), true);
+});
+
+test("pruneOthers removes other sessions' old files but never the current session's", () => {
+  const dir = tmpDir();
+  const armed = path.join(dir, 'respawn-armed');
+  fs.mkdirSync(armed);
+  const old = NOW_S - 31 * 86400;
+  const recent = NOW_S - 29 * 86400;
+  const mk = (name, t) => { const f = path.join(armed, name); fs.writeFileSync(f, 'x'); fs.utimesSync(f, t, t); return f; };
+  const mine = mk(SESSION, old);
+  const myFlag = mk(`${SESSION}.123.warn.flag`, old);
+  const otherOld = mk('sess-other', old);
+  const otherOldFlag = mk('sess-other.123.stop.flag', old);
+  const otherRecent = mk('sess-recent', recent);
+  pruneOthers(armed, SESSION, NOW_S);
+  assert.equal(fs.existsSync(mine), true);
+  assert.equal(fs.existsSync(myFlag), true);
+  assert.equal(fs.existsSync(otherOld), false);
+  assert.equal(fs.existsSync(otherOldFlag), false);
+  assert.equal(fs.existsSync(otherRecent), true);
 });
 
 test('silent when the cache is missing, stale, corrupt or from the future', () => {
@@ -121,16 +153,16 @@ test('silent below the warning level', () => {
   assert.equal(run(dir), null);
 });
 
-test('warning tier at stop - 15, informational wording, ends with the marker cleanup sentence', () => {
+test('warning tier at stop - 15: facts only, no file instruction, neutral scope line', () => {
   const dir = tmpDir();
-  const marker = arm(dir);
+  arm(dir);
   writeCache(dir, { five_hour: five(70) });
   const note = run(dir);
   assert.match(note, /^Usage note from the respawn hook/);
   assert.match(note, /70%/);
   assert.match(note, /warning range that starts at 70%/);
-  assert.doesNotMatch(note, /\b(must|immediately|you are required|system)\b/i);
-  assert.ok(note.endsWith(`If no respawn-state job exists in this session, respawn is not armed: delete the marker file ${marker} and ignore this note.`));
+  assert.doesNotMatch(note, /\b(must|immediately|you are required|system|delete|remove)\b/i);
+  assert.ok(note.endsWith('This only applies if a respawn run is armed in this session (scheduled jobs whose prompt starts with respawn-state:); otherwise it can be ignored.'));
 });
 
 test('stop tier at the stop level', () => {
@@ -332,6 +364,21 @@ test('process: stays silent and keeps the note for the main agent when fired ins
   assert.equal(sub.stdout, '');
   const main = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ session_id: SESSION }), env: hookEnv(dir), encoding: 'utf8' });
   assert.match(JSON.parse(main.stdout).hookSpecificOutput.additionalContext, /stop tier/);
+});
+
+test("process: prunes other sessions' files older than 30 days, keeps the current session's", () => {
+  const dir = tmpDir();
+  seedLive(dir, 10);
+  const armed = path.join(dir, 'respawn-armed');
+  const oldT = Date.now() / 1000 - 31 * 86400;
+  const otherOld = path.join(armed, 'sess-other');
+  fs.writeFileSync(otherOld, 'stop=85\n');
+  fs.utimesSync(otherOld, oldT, oldT);
+  fs.utimesSync(path.join(armed, SESSION), oldT, oldT); // our own marker is old too, and must stay
+  const res = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ session_id: SESSION }), env: hookEnv(dir), encoding: 'utf8' });
+  assert.equal(res.status, 0);
+  assert.equal(fs.existsSync(otherOld), false);
+  assert.equal(fs.existsSync(path.join(armed, SESSION)), true);
 });
 
 test('process: empty or invalid stdin exits 0 with no output', () => {

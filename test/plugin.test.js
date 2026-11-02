@@ -34,9 +34,11 @@ test('marketplace lists the plugin under the same name and sources it from the r
   assert.equal(market.plugins[0].source, './');
 });
 
-test('public files have no em-dashes', () => {
-  const files = ['README.md', 'CHANGELOG.md', 'skill/SKILL.md', 'scripts/respawn-tap.js', 'scripts/respawn-usage-hook.js', 'hooks/hooks.json'];
+test('public files have no em-dashes or en-dashes', () => {
+  const files = ['README.md', 'CHANGELOG.md', 'skill/SKILL.md', 'scripts/respawn-tap.js', 'scripts/respawn-usage-hook.js', 'hooks/hooks.json', '.claude-plugin/plugin.json', '.claude-plugin/marketplace.json'];
   for (const f of files) {
-    assert.equal(fs.readFileSync(path.join(ROOT, f), 'utf8').includes(String.fromCharCode(0x2014)), false, f);
+    const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    assert.equal(text.includes(String.fromCharCode(0x2014)), false, `${f} has an em-dash`);
+    assert.equal(text.includes(String.fromCharCode(0x2013)), false, `${f} has an en-dash`);
   }
 });

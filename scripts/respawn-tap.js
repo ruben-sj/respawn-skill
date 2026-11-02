@@ -113,6 +113,13 @@ function killTree(child) {
   }
 }
 
+let activeChild = null;
+
+// Kills the inner command's tree if it is still running.
+function killActive() {
+  if (activeChild && activeChild.exitCode === null && activeChild.signalCode === null) killTree(activeChild);
+}
+
 // Runs the inner command with the statusline JSON on stdin. Resolves with
 // whatever stdout arrived, also when the command hangs past the timeout.
 function runInner(command, raw, timeoutMs) {
@@ -124,6 +131,7 @@ function runInner(command, raw, timeoutMs) {
     try {
       child = spawn(command, { shell: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'ignore'] });
     } catch (_) { resolve(''); return; }
+    activeChild = child;
     const timer = setTimeout(() => {
       killTree(child);
       try { child.stdout.destroy(); } catch (_) { /* closed */ }
@@ -151,6 +159,9 @@ async function main() {
 }
 
 if (require.main === module) {
+  // If Claude Code stops the status line command, take the inner command down too.
+  for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { killActive(); process.exit(0); });
+  process.on('exit', killActive);
   // Exit explicitly: a leftover grandchild must not keep the statusline waiting.
   main().catch(() => {}).then(() => process.exit(0));
 }
