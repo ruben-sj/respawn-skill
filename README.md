@@ -38,6 +38,8 @@ mkdir -p ~/.claude/skills/respawn && curl -fsSL https://raw.githubusercontent.co
 /plugin install respawn@respawn-skill
 ```
 
+On Claude Code 2.1.275 or later one step also works: `/plugin install respawn --marketplace ruben-sj/respawn-skill`.
+
 If you installed the skill by hand earlier, delete `~/.claude/skills/respawn` first so the skill is not defined twice. The curl install above keeps working: the skill stays at `skill/SKILL.md`, and the plugin points at that same file.
 
 **Requires `CronCreate`, `CronDelete`, and `PushNotification` tools in your harness.** If your Claude Code environment doesn't expose these, the skill is inert.
@@ -112,7 +114,18 @@ Setup:
    }
    ```
 
-   Without an existing status line, use just `node ~/.claude/respawn/respawn-tap.js`. On Windows use forward slashes in the path.
+   Without an existing status line, use just `node ~/.claude/respawn/respawn-tap.js`.
+
+   The inner command runs through the system shell (cmd.exe on Windows), which does not expand `~`. On Windows write full paths with forward slashes, for example:
+
+   ```json
+   {
+     "statusLine": {
+       "type": "command",
+       "command": "node C:/Users/<you>/.claude/respawn/respawn-tap.js \"powershell -NoProfile -File C:/Users/<you>/.claude/statusline.ps1\""
+     }
+   }
+   ```
 
 Limits: `rate_limits` appears in the status line input only on Pro/Max/Ultra plans and only after the first API response in a session, so the cache can be empty early on. There is one cache file shared by all sessions, so with several terminals open the hook stays silent whenever another session wrote last. The cache holds only the session id, a timestamp and usage percentages.
 
@@ -149,7 +162,7 @@ Still unverified:
 ## Roadmap
 
 - **v0.3.0:** released once it has survived a real usage-limit cutoff.
-- **v0.4.0 (in development):** plugin packaging and the optional usage hook. Next step is seeing the tap and hook work in a live terminal session.
+- **v0.4.0 (in development):** plugin packaging and the optional usage hook. Next step is a live terminal test, starting with checking that the session id is the same in the status line input, the hook input and the skill.
 - **Later:** a first-party way to read usage from hooks or from the desktop app, if one appears; 1.0.0 once the behavior has settled.
 
 ## Contributing

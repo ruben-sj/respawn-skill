@@ -205,6 +205,22 @@ test('process: prints PostToolUse additionalContext JSON when armed and over the
   assert.equal(again.stdout, '');
 });
 
+test('process: stays silent and keeps the note for the main agent when fired inside a subagent', () => {
+  const dir = tmpDir();
+  const now = Math.floor(Date.now() / 1000);
+  const d = path.join(dir, 'respawn-armed');
+  fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, SESSION), 'stop=85\n');
+  fs.writeFileSync(path.join(dir, 'respawn-usage.json'), JSON.stringify({
+    ts: now, session_id: SESSION, five_hour: { used_percentage: 90, resets_at: now + 3600 }, seven_day: null,
+  }));
+  const env = { ...process.env, RESPAWN_CLAUDE_DIR: dir };
+  const sub = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ session_id: SESSION, agent_id: 'agent-1' }), env, encoding: 'utf8' });
+  assert.equal(sub.stdout, '');
+  const main = spawnSync(process.execPath, [HOOK], { input: JSON.stringify({ session_id: SESSION }), env, encoding: 'utf8' });
+  assert.match(JSON.parse(main.stdout).hookSpecificOutput.additionalContext, /stop tier/);
+});
+
 test('process: empty or invalid stdin exits 0 with no output', () => {
   const dir = tmpDir();
   for (const input of ['', 'not json', '{}']) {

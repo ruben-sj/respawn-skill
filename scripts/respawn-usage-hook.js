@@ -106,6 +106,9 @@ function readStdin() {
 async function main() {
   let input = null;
   try { input = JSON.parse((await readStdin()).replace(/^﻿/, '')); } catch (_) { return; }
+  // Subagents share the parent's session id; stay out of their tool calls so
+  // the note is not spent where the main agent cannot see it.
+  if (input && input.agent_id) return;
   const note = evaluate({ sessionId: input && input.session_id, dir: claudeDir(), nowS: Date.now() / 1000 });
   if (note) {
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: note } }) + '\n');
