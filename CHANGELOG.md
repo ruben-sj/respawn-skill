@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Cutoff detection also treats a turn that stopped mid-work (last message is a tool result with no follow-up, 30+ min gap) as a cutoff, since the app can hit the limit without showing an error.
+
 ## v0.2.0 - 2026-08-10
 
 Field-tested through multiple overnight, multi-session, multi-window runs. Added:

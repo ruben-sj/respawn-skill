@@ -50,7 +50,9 @@ Gaming metaphor: the session "dies" (gets blocked by the 5-hour usage limit), wa
 
 Confirmed by repeated use: if the account is still blocked by the usage limit when the job fires, the turn never runs at all (rejected before any model turn starts), so the fact that this prompt actually runs is evidence the window is open. Behave accordingly.
 
-When the prompt does run, check the conversation history for an unhandled rate-limit cutoff — a visible error message about the usage limit (e.g. mentioning a reset time) that appeared after `/respawn` was activated and that no later message in the session has already acted on:
+When the prompt does run, check the conversation history for an unhandled rate-limit cutoff that happened after `/respawn` was activated and that no later message in the session has already acted on. Either of these counts:
+- a visible error message about the usage limit (e.g. mentioning a reset time), or
+- a turn that stopped mid-work: the last message before this firing is a tool result with no assistant follow-up, and roughly 30+ minutes have passed since it. Field-observed: the app can cut a turn off at the limit without showing any error in the conversation. An explicit user interruption does not count.
 
 - **No unhandled rate-limit block found**: do nothing visible. Leave the recurring job in place — a cutoff could come later.
 - **An unhandled cutoff found**, branch on `cancel_window` (carried in this job's prompt; default `5` if absent — jobs created before this option existed):
