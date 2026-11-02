@@ -32,6 +32,26 @@ By default it'll ask you a couple of quick questions (how many windows to cover,
 
 All combinable and order-independent, e.g. `/respawn 3 22:15 cancel=10`.
 
+## Coming in v0.3 (in testing)
+
+v0.3 lives on the [`v0.3.0-dev`](https://github.com/ruben-sj/respawn-skill/tree/v0.3.0-dev) branch and is being field-tested before it lands on `main`. Highlights:
+
+- **Reads the reset time itself** from the Claude desktop app's usage data, so you no longer need to know it.
+- **Optional soft stop** (`stop=N`, default 85 %): pauses at a clean point before the limit and resumes after the reset, leaving headroom for other sessions and scheduled tasks.
+- **Sturdier scheduling:** a backstop poll next to each timed check, off-minute timing, weekly-limit awareness, and one fixed prompt template for every scheduled job so the rules don't drift over long runs.
+- **Falls back to v0.2 behavior** when usage data isn't available (for example outside the desktop app).
+
+Want it early? Install from the branch instead of `main`:
+
+```bash
+mkdir -p ~/.claude/skills/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/v0.3.0-dev/skill/SKILL.md -o ~/.claude/skills/respawn/SKILL.md
+```
+
+## Roadmap
+
+- **v0.3.0:** released once it has survived a real usage-limit cutoff.
+- **Later:** an optional hook that warns about usage using the terminal CLI's status line data (in our testing the desktop app did not run status line commands), and packaging as a Claude Code plugin.
+
 ## What's new in v0.2
 
 - **Multi-window (`windows`)**: keep re-arming automatically through N consecutive cutoffs, or indefinitely, instead of resuming once and stopping.
