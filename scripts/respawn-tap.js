@@ -4,18 +4,29 @@
 // same input to the user's own statusline command (if any) and prints its
 // output. It never fails the statusline: every error is swallowed.
 //
-// Usage: node respawn-tap.js [your existing statusline command ...]
-// Env:   RESPAWN_CLAUDE_DIR replaces ~/.claude as the cache folder (used by the tests).
+// Usage: node respawn-tap.js "<your existing statusline command>"
+// The inner command is one string and runs through the platform shell
+// (cmd.exe on Windows, sh elsewhere). Extra arguments are joined with spaces.
+//
+// Env:   RESPAWN_CLAUDE_DIR       replaces ~/.claude (used by the tests)
+//        RESPAWN_TAP_TIMEOUT_MS   limit for the inner command, default 10000
 'use strict';
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 
-function cachePath() {
-  const dir = process.env.RESPAWN_CLAUDE_DIR || path.join(os.homedir(), '.claude');
-  return path.join(dir, 'respawn-usage.json');
+const CACHE_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
+
+function claudeDir() {
+  return process.env.RESPAWN_CLAUDE_DIR || path.join(os.homedir(), '.claude');
+}
+
+// Same rule as the hook, so both name the same file for a session.
+function safeId(id) {
+  if (typeof id !== 'string' || id.length === 0 || id.length > 128) return null;
+  return id.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 
 function pick(win) {
@@ -55,12 +66,29 @@ function writeAtomic(file, text) {
   }
 }
 
-function tap(raw, file, nowMs) {
+// Best effort: drop per-session caches nobody has touched for 8 days.
+function pruneOld(dir, nowMs) {
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      const file = path.join(dir, f);
+      try { if (nowMs - fs.statSync(file).mtimeMs > CACHE_MAX_AGE_MS) fs.unlinkSync(file); } catch (_) { /* skip */ }
+    }
+  } catch (_) { /* nothing to prune */ }
+}
+
+// Saves ~/.claude/respawn-usage/<session id>.json. The folder's existence is
+// also how the respawn skill learns that the hook layer is installed.
+function tap(raw, dir, nowMs) {
   let input;
   try { input = JSON.parse(raw); } catch (_) { return false; }
   const record = buildRecord(input, nowMs);
-  if (!record) return false;
-  try { writeAtomic(file, JSON.stringify(record) + '\n'); } catch (_) { return false; }
+  const id = record && safeId(record.session_id);
+  if (!id) return false;
+  const cacheDir = path.join(dir, 'respawn-usage');
+  try {
+    writeAtomic(path.join(cacheDir, `${id}.json`), JSON.stringify(record) + '\n');
+  } catch (_) { return false; }
+  if (Math.random() < 0.02) pruneOld(cacheDir, nowMs);
   return true;
 }
 
@@ -73,18 +101,58 @@ function readStdin() {
   });
 }
 
+function killTree(child) {
+  try {
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      process.kill(-child.pid, 'SIGKILL');
+    }
+  } catch (_) {
+    try { child.kill('SIGKILL'); } catch (__) { /* already gone */ }
+  }
+}
+
+// Runs the inner command with the statusline JSON on stdin. Resolves with
+// whatever stdout arrived, also when the command hangs past the timeout.
+function runInner(command, raw, timeoutMs) {
+  return new Promise((resolve) => {
+    let out = '';
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearTimeout(timer); resolve(out); } };
+    let child;
+    try {
+      child = spawn(command, { shell: true, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'ignore'] });
+    } catch (_) { resolve(''); return; }
+    const timer = setTimeout(() => {
+      killTree(child);
+      try { child.stdout.destroy(); } catch (_) { /* closed */ }
+      finish();
+    }, timeoutMs);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (c) => { out += c; });
+    child.stdout.on('error', finish);
+    child.on('error', finish);
+    child.on('close', finish);
+    child.stdin.on('error', () => { /* command exited before reading */ });
+    child.stdin.end(raw);
+  });
+}
+
 async function main() {
-  const raw = (await readStdin()).replace(/^﻿/, '');
-  tap(raw, cachePath(), Date.now());
+  const raw = (await readStdin()).replace(/^\uFEFF/, '');
+  tap(raw, claudeDir(), Date.now());
 
   const command = process.argv.slice(2).join(' ').trim();
   if (!command) return;
-  const res = spawnSync(command, { input: raw, shell: true, encoding: 'utf8', timeout: 10000 });
-  if (res.stdout) process.stdout.write(res.stdout);
+  const timeoutMs = Number(process.env.RESPAWN_TAP_TIMEOUT_MS) > 0 ? Number(process.env.RESPAWN_TAP_TIMEOUT_MS) : 10000;
+  const out = await runInner(command, raw, timeoutMs);
+  if (out) await new Promise((resolve) => process.stdout.write(out, resolve));
 }
 
 if (require.main === module) {
-  main().catch(() => {});
+  // Exit explicitly: a leftover grandchild must not keep the statusline waiting.
+  main().catch(() => {}).then(() => process.exit(0));
 }
 
-module.exports = { buildRecord, tap };
+module.exports = { buildRecord, tap, safeId, pruneOld };

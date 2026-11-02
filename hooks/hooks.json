@@ -6,8 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/respawn-usage-hook.js"],
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/respawn-usage-hook.js\"",
             "timeout": 10
           }
         ]

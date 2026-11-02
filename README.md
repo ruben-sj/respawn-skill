@@ -38,7 +38,7 @@ mkdir -p ~/.claude/skills/respawn && curl -fsSL https://raw.githubusercontent.co
 /plugin install respawn@respawn-skill
 ```
 
-On Claude Code 2.1.275 or later one step also works: `/plugin install respawn --marketplace ruben-sj/respawn-skill`.
+From a shell, recent Claude Code builds also offer a one-step form: `claude plugin install respawn --marketplace ruben-sj/respawn-skill` (check `claude plugin install --help` for the `--marketplace` option).
 
 If you installed the skill by hand earlier, delete `~/.claude/skills/respawn` first so the skill is not defined twice. The curl install above keeps working: the skill stays at `skill/SKILL.md`, and the plugin points at that same file.
 
@@ -68,7 +68,8 @@ All combinable and order-independent, e.g. `/respawn 3 22:15 cancel=10 stop=80`.
 
 - **Plugin packaging.** `/plugin marketplace add ruben-sj/respawn-skill`, then install `respawn`. The skill file stays at `skill/SKILL.md`.
 - **Optional usage hook and statusline tap** for the terminal CLI (see above), so usage warnings do not depend on the model remembering to check.
-- **Armed marker.** Respawn writes and deletes `~/.claude/respawn-armed/<session id>` so the hook knows when a run is armed.
+- **Armed marker.** With the hook layer installed, respawn writes `~/.claude/respawn-armed/<session id>` once at invocation and deletes it when the run ends, so the hook knows when a run is armed. Without the hook layer respawn writes no files, as before.
+- **Soft stop in the terminal.** With the hook layer installed, the soft stop (default 85 %) also works in the terminal CLI, where the desktop usage tool does not exist: hook notes serve as the usage readings.
 
 ## What's new in v0.3
 
@@ -85,25 +86,27 @@ Without live usage readings respawn keeps the v0.2 flow, plus the off-minute tim
 
 ## Optional: usage hook (terminal CLI)
 
-New in v0.4. Without this, usage awareness depends on the model remembering to read usage at its checkpoints. This optional layer adds a hook that does the watching for it, using the usage numbers the terminal CLI passes to the status line command. Two small Node scripts, no dependencies, and everything in respawn still works without them.
+New in v0.4. Without this, usage awareness depends on the model remembering to read usage at its checkpoints, and the terminal CLI has no usage tool at all. This optional layer adds a hook that does the watching, using the usage numbers the terminal CLI passes to the status line command. Two small Node scripts (Node.js is required for this layer), no dependencies. Everything in respawn still works without them, and without them respawn writes no files.
 
 **Honest caveat:** in a 5-minute test the Claude desktop app's Code tab did not run the status line command, so this layer most likely works only in the terminal `claude` CLI. In the desktop app the skill's own `get_usage` checkpoints stay the mechanism. The scripts are covered by unit tests on fixture data; they have not yet been seen working in a live terminal session.
 
 How it fits together:
 
-1. **Usage tap** (`scripts/respawn-tap.js`). A wrapper for your `statusLine` command. It saves `{ts, session_id, five_hour, seven_day}` to `~/.claude/respawn-usage.json` and passes the same input on to your existing status line command, forwarding its output. With no command it prints nothing.
-2. **Usage hook** (`hooks/hooks.json`, shipped by the plugin). A `PostToolUse` hook that does nothing unless a respawn run is armed in the current session. Respawn marks that by writing `~/.claude/respawn-armed/<session id>` (one line, `stop=85`) when it arms, and deleting it when the run ends. Markers not rewritten for 24 hours are ignored. When armed and the cache is fresh (same session, under 10 minutes old), the hook compares the 5-hour percent to your soft-stop level and adds one short informational note to the context when usage reaches `stop - 15` and again when it reaches `stop`, each once per crossing. A weekly window at 98 % counts as the stop level, as in the skill. A stale or missing cache means silence. The skill treats such a note as a checkpoint reading.
+1. **Usage tap** (`scripts/respawn-tap.js`). A wrapper for your `statusLine` command. It saves `{ts, session_id, five_hour, seven_day}` to `~/.claude/respawn-usage/<session id>.json` (one file per session) and passes the same input on to your existing status line command, forwarding its output. With no command it prints nothing. The existing command gets 10 seconds; after that it is stopped and whatever it had printed is forwarded. The `respawn-usage` folder is also how the skill learns that the hook layer is installed.
+2. **Usage hook** (`hooks/hooks.json`, shipped by the plugin). A `PostToolUse` hook that does nothing unless a respawn run is armed in the current session. Respawn marks that by writing `~/.claude/respawn-armed/<session id>` (one line, `stop=85`) once at invocation, and deleting it when the run ends. A marker older than 8 days is ignored and removed (recurring jobs expire after 7). When armed and this session's cache is fresh (under 10 minutes old), the hook compares the rounded 5-hour percent to your soft-stop level and adds one short informational note to the context when usage reaches `stop - 15` (not for `stop` of 15 or less) and again when it reaches `stop`, each once per crossing. A weekly window at 98 % counts as the stop level, and then the note names the weekly reset as the target, as in the skill. A stale or missing cache means silence. The skill treats such a note as a checkpoint reading, and the note tells the model to delete a leftover marker if no respawn run exists.
+
+With the layer installed, a plain `/respawn` in the terminal gets the soft stop (default 85 %) too, driven by those notes. The hook starts a short Node process after every tool call; it exits within milliseconds when nothing is armed.
 
 Setup:
 
 1. Install the plugin (above) for the hook.
-2. Copy the tap somewhere stable (the plugin folder changes with each version):
+2. Copy the tap somewhere stable (the plugin folder changes with each version), pinned to the release you installed:
 
    ```bash
-   mkdir -p ~/.claude/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/main/scripts/respawn-tap.js -o ~/.claude/respawn/respawn-tap.js
+   mkdir -p ~/.claude/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/v0.4.0/scripts/respawn-tap.js -o ~/.claude/respawn/respawn-tap.js
    ```
 
-3. Change the `statusLine` entry in your `~/.claude/settings.json` by hand. Plugins cannot set `statusLine`, so this step is always manual. Pass your existing status line command as one quoted argument:
+3. Change the `statusLine` entry in your `~/.claude/settings.json` by hand. Plugins cannot set `statusLine`, so this step is always manual. Pass your existing status line command as **one quoted string**:
 
    ```json
    {
@@ -116,7 +119,7 @@ Setup:
 
    Without an existing status line, use just `node ~/.claude/respawn/respawn-tap.js`.
 
-   The inner command runs through the system shell (cmd.exe on Windows), which does not expand `~`. On Windows write full paths with forward slashes, for example:
+   The inner command runs through the platform shell (cmd.exe on Windows, sh elsewhere), which does not expand `~` inside the quoted string on Windows. On Windows write full paths with forward slashes, for example:
 
    ```json
    {
@@ -127,7 +130,7 @@ Setup:
    }
    ```
 
-Limits: `rate_limits` appears in the status line input only on Pro/Max/Ultra plans and only after the first API response in a session, so the cache can be empty early on. There is one cache file shared by all sessions, so with several terminals open the hook stays silent whenever another session wrote last. The cache holds only the session id, a timestamp and usage percentages.
+Limits: `rate_limits` appears in the status line input only on Pro/Max/Ultra plans and only after the first API response in a session, so the cache can be empty early on. The cache holds only the session id, a timestamp and usage percentages, and files older than 8 days are pruned. The hook skips tool calls made inside subagents.
 
 ## Compared to the built-in auto-continue
 
@@ -140,7 +143,7 @@ Claude Code v2.1.234 and later include a built-in setting, `autoContinueAtUsageL
 3. Once a firing detects an unhandled rate-limit cutoff, it sends a push notification and, unless `cancel_window` is `0`, waits out the cancel grace period via a follow-up one-time job before resuming the original interrupted work.
 4. If `windows` isn't exhausted, the cycle re-arms for the next cutoff instead of stopping.
 
-All state (window count, cancel window, stop level, job kind) travels inside the scheduled prompts. The core flow writes no files; only the optional usage hook uses a small marker file and a usage cache (see above).
+All state (window count, cancel window, stop level, job kind) travels inside the scheduled prompts. The core flow writes no files. Only if you install the optional usage hook layer (see above) are two small things written: the statusline tap's usage cache and, at invocation, an armed marker.
 
 Full operational detail lives in [`skill/SKILL.md`](skill/SKILL.md), the prompt Claude actually follows.
 
