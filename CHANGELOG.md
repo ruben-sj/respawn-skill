@@ -9,6 +9,7 @@ Stops runaway checks. Observed in real use: a run armed ahead of time that never
 - Superseding a soft stop (the user keeps going) now replaces the pause one-shot with a plain timed check instead of only deleting it, so the run is not left with just a backstop or with no jobs. Re-invoking respawn marks a waiting soft-stop note of the old run as superseded.
 - Empty firings write exactly one fixed, dated log line, including during a soft-stop pause (`| paused`), instead of nothing. The desktop app asks for visible output after an empty turn, which made every firing improvise a chat message.
 - README: the comparison with the built-in auto-continue now follows the official docs (terminal setting on by default, Esc to cancel, stops after three continuations, not auto-started in Remote Control or for resets more than 24 hours away; separate desktop checkbox), and a new limitation notes that every firing draws usage.
+- Tests: eval suite in `evals/` for `claude plugin eval` (17 cases: cutoff detection, idle expiry, roll-over and backstop level, soft-stop pause, lost follow-up, classic recheck), graded mostly by free regex checks on the calls a firing states and its final log line. `evals/sync-template.js` keeps each case's job prompt identical to the template in `skill/SKILL.md`, and `node --test` fails when a case is stale or a grader rejects its known-good answer.
 
 ## v0.4.0 - unreleased
 

@@ -1,0 +1,57 @@
+---
+description: "Idle expiry: the earliest log line after the last real message is 5.5 hours old, so the poll deletes the run, notifies and logs disarmed, idle."
+tags: [idle, smoke]
+max_turns: 8
+timeout_seconds: 300
+allowed_tools: [Skill]
+---
+Eval sandbox. You are the Claude Code session whose conversation is shown below. The respawn skill armed scheduled jobs in it, and one of them has just fired: its prompt is the last block of this message, and this turn is that firing. Do what the job prompt says.
+
+The tools the job prompt names (CronCreate, CronList, CronDelete, PushNotification, mcp__ccd_session_mgmt__get_usage, the shell) do not exist in this sandbox. Do not try to call them and do not look for files. Write down the calls you would make instead, using these results:
+- Local date and time (what the shell would print): 2026-11-04 00:13 (local time zone UTC+1). This is authoritative; ignore any other date you know. No call is needed to get it.
+- CronList returns: [{"id":"job_p1","cron":"13,43 * * * *","recurring":true,"prompt":"respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none ... (rest of the respawn job text)"}]
+- mcp__ccd_session_mgmt__get_usage returns: error: no such tool in this session (usage readings are not available here)
+- CronCreate returns the new job's ID: job_n1 for the first job you create, job_n2 for the second, and so on. CronDelete and PushNotification succeed.
+The Skill tool is real here: if the job prompt says to load the respawn skill, call it for real (and do not write a CALL line for it).
+
+Answer in this format and nothing else (no headings, no explanations, no code fences):
+1. One line per tool call you would make, in order: CALL <ToolName> <JSON arguments on one line>. For CronCreate give "cron", "recurring" and "state" (the new job prompt's full respawn-state: line, instead of the whole prompt). For CronDelete give "id". For PushNotification give "message".
+2. Then the exact text this turn ends with in the chat, as the user would see it.
+
+=== Conversation so far (oldest first, local times) ===
+[user 2026-11-03 18:20] /respawn
+[assistant 2026-11-03 18:21] Respawn is armed: classic: polling every 30 min until the window reopens. Classic mode: usage readings are not available here; soft stop off (no usage hook layer found for this session). You'll get 5 min to cancel once it fires. It disarms itself after roughly 5 to 10 hours with no cutoff and no activity. Jobs: job_p1 (poll, 13,43 * * * *).
+[user 2026-11-03 18:30] That's all for today, thanks.
+[assistant 2026-11-03 18:31] You're welcome. Respawn stays armed in the background.
+[user 2026-11-03 18:43, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 18:43] respawn log: 2026-11-03 18:43 | poll | no cutoff
+[user 2026-11-03 19:13, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 19:13] respawn log: 2026-11-03 19:13 | poll | no cutoff
+[user 2026-11-03 19:43, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 19:43] respawn log: 2026-11-03 19:43 | poll | no cutoff
+[user 2026-11-03 20:13, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 20:13] respawn log: 2026-11-03 20:13 | poll | no cutoff
+[user 2026-11-03 20:43, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 20:43] respawn log: 2026-11-03 20:43 | poll | no cutoff
+[user 2026-11-03 21:13, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 21:13] respawn log: 2026-11-03 21:13 | poll | no cutoff
+[user 2026-11-03 21:43, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 21:43] respawn log: 2026-11-03 21:43 | poll | no cutoff
+[user 2026-11-03 22:13, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 22:13] respawn log: 2026-11-03 22:13 | poll | no cutoff
+[user 2026-11-03 22:43, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 22:43] respawn log: 2026-11-03 22:43 | poll | no cutoff
+[user 2026-11-03 23:13, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 23:13] respawn log: 2026-11-03 23:13 | poll | no cutoff
+[user 2026-11-03 23:43, scheduled job prompt] respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none (followed by the same respawn job text as the job prompt at the end of this message)
+[assistant 2026-11-03 23:43] respawn log: 2026-11-03 23:43 | poll | no cutoff
+=== End of conversation ===
+
+=== Job prompt (the message that just arrived) ===
+respawn-state: usage=off windows=1 cancel_window=5 stop=off kind=poll backstop=none
+This is a respawn job (respawn skill). First get the current local date and time (e.g. from the shell). If kind=followup, go straight to step 4. A firing that resumes nothing makes its tool calls first and ends its turn with exactly one `respawn log: <local date and time> | ...` line as its only text (step 1 or 3), no chat sentence.
+1. If kind=backstop or kind=poll and a `respawn soft stop:` note is waiting (its resume_after not reached yet, and no `soft stop superseded` log line after it): end the turn with `respawn log: <local date and time> | <kind> | paused`.
+2. Look for an unhandled cutoff since respawn was armed. Signals: (a) a usage-limit error message; (b) a turn that stopped mid-work: the last message that is not respawn's own is a tool result with no assistant follow-up, and either 30+ minutes have passed since it or (usage=on) a 5-hour reset time recorded in the conversation before it has passed since; (c) a `respawn soft stop:` note whose resume_after is reached and that is not followed by a `soft stop superseded` log line. Respawn's own messages (everything in a turn started by a respawn job prompt, unless that turn resumed the work, plus `respawn log:` lines) never count as the last message, and an app message asking for visible output is looked past, never counted. A cutoff is handled once a respawn "Window is open again" or "Reset reached" notification, or a kind=followup job, appears after it, or once the work was resumed or cancelled.
+3. Nothing unhandled (this includes a handled cutoff whose follow-up is pending). If a handled cutoff's notification is older than cancel_window + 10 minutes and nothing has resumed or cancelled since, the follow-up was lost: go to step 4 as kind=followup. Otherwise: (a) Idle expiry: if no cutoff notification waits for its follow-up, no `respawn soft stop:` note is waiting, and the earliest `respawn log:` line after the last message that is not respawn's own is 4.5 hours old or more (24 hours if windows=0), delete every job whose prompt starts with respawn-state: (find them with CronList; without it, use the job IDs listed in the conversation), send a PushNotification "Respawn disarmed: no cutoff and no activity for hours. Arm it again if you still need it.", and end the turn with `respawn log: <local date and time> | <kind> | disarmed, idle`. (b) If kind=timed and usage=on and no follow-up is pending: roll over, unless CronList lists another kind=timed job of respawn that fires later than now (then the run is already covered; skip to the log line). When unsure, roll over: a duplicate check costs less than a run with no jobs. Call mcp__ccd_session_mgmt__get_usage. Target: the 5-hour resetsAt, or the resetsAt of a weekly window at 98 % or more; now + 5 hours if it is missing or past. resetsAt is UTC: convert it to local time for the cron expression, add 3 to 5 minutes so the minute is not :00 or :30, and if the result is past or under 2 minutes away use now + 3 minutes. Backstop level B = stop - 15, or 70 if stop=off. If percentUsed is at or above B or a weekly window is at 98 % or more, first make sure a backstop exists (check with CronList, or without it trust the backstop ID in the state line; create one, kind=backstop backstop=self, if there is none) and use its ID; otherwise delete any backstop of this run and use backstop=none. Then create the new kind=timed one-shot with that backstop value, same state line otherwise. (c) If kind=timed and usage=off, schedule kind=recheck 15 minutes out; if kind=recheck, create the recurring 30-minute poll (kind=poll, minutes 13,43). Then end the turn with one line `respawn log: <local date and time> | <kind> | <detail>`, where detail is `5-hour <percentUsed>% resets <resetsAt>` if usage=on (from the reading in (b), or a fresh mcp__ccd_session_mgmt__get_usage call), else `no cutoff`.
+4. Unhandled cutoff found, or kind=followup: load the respawn skill (Skill tool) for reference only, do not run its "On invocation", and follow its "On each check firing" step 4 (cutoff found) or "On the cancel-window follow-up" (kind=followup) with the state line above. If the skill cannot be loaded: for kind=followup, if the user replied CANCEL, stop or no since the notification, delete every job whose prompt starts with respawn-state: and confirm; otherwise delete those jobs, send a PushNotification that the window is open again and respawn is now disarmed, and resume the interrupted work. For a found cutoff with cancel_window > 0, send a PushNotification "Window is open again. Resuming in <cancel_window> min. Reply CANCEL to stop.", create a kind=followup one-shot from this template cancel_window minutes out, and end the turn; with cancel_window = 0, act as for kind=followup without a cancel reply.
+New jobs copy this template verbatim. Schedule one-shots in local time, off minute :00 and :30 (reset time + 3 to 5 minutes).

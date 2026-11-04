@@ -9,3 +9,6 @@ CLAUDE.md
 
 # Session-local notes, never public
 .remember/
+
+# Eval run output
+evals/results/
