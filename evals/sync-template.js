@@ -61,7 +61,7 @@ function main() {
   for (const file of promptFiles()) {
     const text = fs.readFileSync(file, 'utf8');
     const next = syncPrompt(text, template);
-    if (next === text) continue;
+    if (next === text.replace(/\r\n/g, '\n')) continue;
     stale.push(path.relative(ROOT, file));
     if (!check) fs.writeFileSync(file, next);
   }

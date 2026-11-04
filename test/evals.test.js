@@ -61,8 +61,8 @@ test('every prompt.md carries the current job template from SKILL.md', () => {
   const files = promptFiles();
   assert.ok(files.length >= 12, `expected at least 12 cases, found ${files.length}`);
   for (const file of files) {
-    const text = fs.readFileSync(file, 'utf8');
-    assert.equal(syncPrompt(text, template), text, `${path.relative(EVALS, file)} is stale: run node evals/sync-template.js`);
+    const text = fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
+    assert.equal(syncPrompt(text, template), text,`${path.relative(EVALS, file)} is stale: run node evals/sync-template.js`);
   }
 });
 
