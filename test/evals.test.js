@@ -87,7 +87,7 @@ test('eval files contain no em-dashes and no local paths', () => {
   });
   for (const file of walk(EVALS)) {
     const text = fs.readFileSync(file, 'utf8');
-    assert.ok(!text.includes('—'), `${file}: em-dash`);
+    assert.ok(!text.includes('\u2014'), `${file}: em-dash`);
     assert.ok(!/(?<!\w)[A-Z]:\\\w|\/Users\/|\/home\//.test(text), `${file}: local path`);
   }
 });
