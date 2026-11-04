@@ -6,6 +6,8 @@ A community-made [Claude Code](https://claude.com/claude-code) skill that auto-r
 
 **Field-tested (v0.2 core):** multiple overnight runs, multiple sessions running it in parallel, multiple consecutive 5-hour windows in a single run. The core mechanism (a scheduled job surviving repeated rate-limit rejections and firing correctly once the window reopens) has held up in real use. The v0.3 additions (live usage readings, backstop, soft stop) are newer and less field-tested. **Not an official Anthropic feature:** auto-resume after a rate limit was requested in GitHub issues `anthropics/claude-code` #26775 and #36320, and Claude Code v2.1.234 and later has a built-in `autoContinueAtUsageLimit` setting (see [below](#compared-to-the-built-in-auto-continue)). This skill is a best-effort workaround built on scheduling tools (`CronCreate`/`CronDelete`/`PushNotification`) available in the harness, and may stop working if those tools change behavior. See [Known limitations](#known-limitations).
 
+> **Known issue in v0.3.0:** a run that never meets a cutoff does not end on its own. Its 30-minute backstop (or the classic poll) keeps firing until the job expires after 7 days, and every firing is a full-context turn that draws on your usage (one observed session logged 29 empty checks over about 15 hours). Until the fix ships in v0.4.1, stop the run when you no longer need it: ask Claude in that session to stop respawn and delete its scheduled jobs, or close the session.
+
 ## Installation
 
 macOS / Linux / Git Bash:
