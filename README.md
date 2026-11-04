@@ -172,7 +172,7 @@ Still unverified:
 
 ## Roadmap
 
-- **v0.4.1 (in testing):** plugin packaging, the optional usage hook for the terminal CLI (experimental), and the fix for runaway checks. Released after a full eval run and an overnight idle field test.
+- **v0.4.1 (released 2026-11-04):** plugin packaging, the optional usage hook for the terminal CLI (experimental), and the fix for runaway checks, after a full eval run and an idle field test.
 - **Next:** the hook layer through a real cutoff, then timed checks from the tap's reset time in classic mode.
 - **Later:** an opt-in reminder that suggests arming respawn in heavy sessions; a first-party way to read usage from hooks or from the desktop app, if one appears; 1.0.0 once the behavior has settled through real cutoffs.
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.4.1 - unreleased
+## v0.4.1 - 2026-11-04
 
 Stops runaway checks. Observed in real use: a run armed ahead of time that never met a cutoff never ended, because `windows` only counts down on a cutoff. The 30-minute backstop (or classic poll) kept firing until the 7-day cron expiry, each firing a full-context turn; one session logged 29 empty backstop firings over about 15 hours at 4 % usage. Changed:
 - Idle expiry: every firing that finds nothing unhandled ends with one `respawn log:` line carrying its local date and time. When the earliest such line after the last non-respawn message is 4.5 hours old or more (roughly 5 to 10 hours after the last activity; 24 hours for `windows=0`), the run deletes all its jobs, sends a push notification and logs `disarmed, idle`. Never while a cutoff notification waits for its follow-up or a soft-stop note is waiting; a cutoff is always detected first. App messages asking for visible output are looked past, so they neither count as activity nor hide a silent cutoff.
@@ -12,6 +12,7 @@ Stops runaway checks. Observed in real use: a run armed ahead of time that never
 - README: the plugin install notes that the hook needs Node.js, the usage hook section is marked experimental, the tap download is pinned to v0.4.1, and the roadmap is current.
 - README: the comparison with the built-in auto-continue now follows the official docs (terminal setting on by default, Esc to cancel, stops after three continuations, not auto-started in Remote Control or for resets more than 24 hours away; separate desktop checkbox), and a new limitation notes that every firing draws usage.
 - Tests: eval suite in `evals/` for `claude plugin eval` (18 cases: cutoff detection, idle expiry, roll-over and backstop level including a firing job that CronList still lists, soft-stop pause, lost follow-up, classic recheck), graded mostly by free regex checks on the calls a firing states and its final log line. `evals/sync-template.js` keeps each case's job prompt identical to the template in `skill/SKILL.md`, and `node --test` fails when a case is stale or a grader rejects its known-good answer. The full suite passed 54 of 54 runs on 2026-11-04 (Claude Code 2.1.311).
+- Field test, 2026-11-04: an armed run left idle in a real desktop session wrote one log line at its first check, rolled the check over to the next reset with no backstop, and disarmed itself there with a push notification and a `disarmed, idle` log line.
 
 ## v0.4.0 - not released separately (ships in v0.4.1)
 
