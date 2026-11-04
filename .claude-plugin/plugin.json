@@ -1,6 +1,6 @@
 {
   "name": "respawn",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Auto-resume a Claude Code session after the 5-hour usage limit, with an optional usage hook for the terminal CLI.",
   "author": { "name": "ruben-sj" },
   "homepage": "https://github.com/ruben-sj/respawn-skill",

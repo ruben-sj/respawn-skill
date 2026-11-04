@@ -66,6 +66,7 @@ All combinable and order-independent, e.g. `/respawn 3 22:15 cancel=10 stop=80`.
 
 ## What's new in v0.4
 
+- **No more runaway checks (0.4.1).** A run that never meets a cutoff now ends by itself: after roughly 5 to 10 hours with no cutoff and no activity in the session, it deletes its jobs and sends a push notification (for `windows=0` after about 24 hours instead). In an active session the timed check rolls over to the next reset instead of leaving a poll behind, and the 30-minute backstop only runs once usage reaches the warning level (70 % by default). Checks that find nothing write one dated `respawn log:` line and nothing else. Trade-off: if usage jumps to the limit with no checkpoint reading in between, there is no backstop yet and only the timed check is left (see [Known limitations](#known-limitations)).
 - **Plugin packaging.** `/plugin marketplace add ruben-sj/respawn-skill`, then install `respawn`. The skill file stays at `skill/SKILL.md`.
 - **Optional usage hook and statusline tap** for the terminal CLI (see above), so usage warnings do not depend on the model remembering to check.
 - **Armed marker.** In the terminal, with the hook layer installed, respawn writes `~/.claude/respawn-armed/<session id>` once at invocation, so the hook knows a run is armed. Only the user-present steps touch it (invocation, and a disarm that overwrites it with `stop=off`); the unattended resume and re-arm never write files. In the desktop app (usage mode) and without the hook layer respawn writes no files, as before.
@@ -75,7 +76,7 @@ All combinable and order-independent, e.g. `/respawn 3 22:15 cancel=10 stop=80`.
 
 - **Reset time read automatically.** When the desktop app's usage tool is available, respawn reads the 5-hour reset time itself, so you no longer need to know it.
 - **Safer timing.** Timed checks fire a few minutes after the reset, never on minute :00 or :30 (one-shots on those minutes can fire up to 90 seconds early).
-- **Backstop.** A recurring 30-minute backstop runs alongside each timed check, in case a one-shot that fires while the account is still blocked does not survive.
+- **Backstop.** A recurring 30-minute backstop runs alongside the timed check, in case a one-shot that fires while the account is still blocked does not survive. Since 0.4.1 it only runs once usage nears the limit.
 - **Weekly limit.** If a weekly window is nearly used up, respawn waits for the weekly reset instead and tells you so.
 - **Soft stop (`stop=N`, default 85).** Respawn can pause itself before the wall: at natural checkpoints it reads usage, avoids starting big fan-outs from N - 15 %, and at N % finishes the current step, writes a short state note, schedules the resume for after the reset and ends its turn. A pause uses up one of the covered windows. If you are already close to the stop level when you arm it, it asks first. The percent is account-wide (other sessions and scheduled tasks share it) and one big step can overshoot, so a value close to 100 behaves almost like plain respawn.
 - **Fixed job prompts.** Every scheduled job uses one verbatim template, so the rules do not drift from job to job over a long run.
@@ -134,14 +135,20 @@ Limits: `rate_limits` appears in the status line input only for subscription pla
 
 ## Compared to the built-in auto-continue
 
-Claude Code v2.1.234 and later include a built-in setting, `autoContinueAtUsageLimit`, that continues a session after a usage limit. It exists, it is first-party, and it may well be all you need. Respawn is an independent skill that adds a few things on top: a configurable cancel window with a push notification before resuming, coverage of several consecutive windows, and a soft stop at a usage threshold. In the author's own use in the Claude desktop app, respawn also turned out more reliable than the built-in option, but that is one setup and not a general claim. Try the built-in setting first if it fits your workflow.
+Claude Code has first-party auto-continue, and it may well be all you need. Per the official docs ([interactive mode](https://code.claude.com/docs/en/interactive-mode.md), [settings](https://code.claude.com/docs/en/settings-reference#autocontinueatusagelimit), [errors](https://code.claude.com/docs/en/errors.md)):
+
+- **Terminal CLI (v2.1.234 and later):** `autoContinueAtUsageLimit`, on by default for claude.ai subscriptions ("Continue automatically at usage limit" in `/config`). It waits in the open session, shows the time it will continue, can be cancelled with Esc, and stops after three automatic continuations in a row. It does not start by itself in Remote Control sessions or for a reset more than 24 hours away.
+- **Desktop app:** a separate "Auto-continue when limits reset" checkbox on the session-limit card. Not on the weekly-limit card.
+
+What respawn adds: a timed cancel window with a push notification before it resumes, a configurable number of covered windows, a soft stop that pauses before the wall at a clean point, weekly-limit handling, and coverage where the built-in wait does not start (Remote Control, long waits). In the author's own desktop use respawn was also more reliable than the built-in option, but that is one setup and not a general claim. If you use both, the first to resume wins: respawn treats a cutoff that was already resumed as handled.
 
 ## How it works
 
-1. On invocation, respawn tries to read live usage. With a reading, it schedules a precise one-time check a few minutes after the 5-hour reset, plus a recurring 30-minute backstop. Without one, it uses the reset time you give (one-time check, 15-minute recheck, then polling) or a plain recurring 30-minute poll.
+1. On invocation, respawn tries to read live usage. With a reading, it schedules a precise one-time check a few minutes after the 5-hour reset, plus a recurring 30-minute backstop once usage reaches the backstop level (`stop - 15`, or 70 % with `nostop`). A timed check that finds no cutoff schedules the next one at the following reset. Without a reading, it uses the reset time you give (one-time check, 15-minute recheck, then polling) or a plain recurring 30-minute poll.
 2. While the account is still blocked, a firing job's turn is rejected before it ever runs (confirmed by repeated use), so a firing that does run is itself evidence the window is open.
-3. Once a firing detects an unhandled rate-limit cutoff, it sends a push notification and, unless `cancel_window` is `0`, waits out the cancel grace period via a follow-up one-time job before resuming the original interrupted work.
-4. If `windows` isn't exhausted, the cycle re-arms for the next cutoff instead of stopping.
+3. A run that is no longer needed ends by itself: after roughly 5 to 10 hours with no cutoff and no activity in the session, a check deletes all of respawn's jobs and sends a push notification. Runs armed with `windows=0` wait about 24 hours instead. Checks that find nothing write a single `respawn log:` line. A lead session that waits many hours for other sessions can also be disarmed this way; arm it with `windows=0` (24-hour threshold) if that matters.
+4. Once a firing detects an unhandled rate-limit cutoff, it sends a push notification and, unless `cancel_window` is `0`, waits out the cancel grace period via a follow-up one-time job before resuming the original interrupted work.
+5. If `windows` isn't exhausted, the cycle re-arms for the next cutoff instead of stopping.
 
 All state (window count, cancel window, stop level, job kind) travels inside the scheduled prompts. The core flow writes no files. Only if you install the optional usage hook layer (see above) are a few small things written: the statusline tap's per-session usage cache, the armed marker (terminal classic runs only, written once at invocation), and tiny flag files from the hook that remember which usage notes were already sent.
 
@@ -154,12 +161,13 @@ Confirmed by the `CronCreate` tool documentation:
 - Jobs are session-only: the app/session must stay open for the entire waiting period, and the jobs vanish if the session ends or the app closes.
 - Recurring jobs auto-expire after 7 days, so a wait that long (for example a weekly limit) may outlive the backstop.
 - Jobs fire only while the session is idle, which can delay or skip the time-sensitive cancel-window deadline.
+- Every firing is a full model turn that sends the whole conversation again, so it draws usage even when it finds nothing. This is why respawn keeps checks rare and disarms idle runs.
 - Recurring jobs can fire late, by up to half their period (at most 30 minutes). One-shots scheduled on :00 or :30 can fire up to 90 seconds early, which is why respawn schedules off-minute.
 
 Still unverified:
 
 - Token cost of rejected attempts while the window is closed.
-- Whether a one-shot that fires while the account is still blocked survives (the reason for the backstop).
+- Whether a one-shot that fires while the account is still blocked survives (the reason for the backstop). Since 0.4.1 the backstop only starts at the warning level, so if usage jumps to the limit with no checkpoint reading in between (for example another session spending the shared quota), only the one-shot is left.
 - How precisely the reported reset time matches the moment the window actually reopens.
 
 ## Roadmap
