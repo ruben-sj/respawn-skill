@@ -28,10 +28,10 @@ Or manually: copy the contents of [`skill/SKILL.md`](skill/SKILL.md) into `~/.cl
 **Pinning a version:** to stay on a specific release, use a tag URL instead of `main`:
 
 ```bash
-mkdir -p ~/.claude/skills/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/v0.3.0/skill/SKILL.md -o ~/.claude/skills/respawn/SKILL.md
+mkdir -p ~/.claude/skills/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/v0.4.1/skill/SKILL.md -o ~/.claude/skills/respawn/SKILL.md
 ```
 
-**As a plugin (v0.4, optional):** the repo is also a Claude Code plugin and marketplace. This installs the same skill plus the optional usage hook (see [below](#optional-usage-hook-terminal-cli)):
+**As a plugin (v0.4, optional):** the repo is also a Claude Code plugin and marketplace. This installs the same skill plus the optional usage hook (see [below](#optional-usage-hook-terminal-cli)). The plugin's hook runs `node` after every tool call, so the plugin needs Node.js on your `PATH`; without it, Claude Code reports a hook error after tool calls. If you do not have Node.js, use the plain skill install above instead:
 
 ```
 /plugin marketplace add ruben-sj/respawn-skill
@@ -87,9 +87,9 @@ Without live usage readings respawn keeps the v0.2 flow, plus the off-minute tim
 
 ## Optional: usage hook (terminal CLI)
 
-New in v0.4. Without this, usage awareness depends on the model remembering to read usage at its checkpoints, and the terminal CLI has no usage tool at all. This optional layer adds a hook that does the watching, using the usage numbers the terminal CLI passes to the status line command. Two small Node scripts (Node.js is required for this layer), no dependencies. Everything in respawn still works without them, and without them respawn writes no files.
+**Experimental.** New in v0.4, tested in two short live terminal sessions but not yet through a real cutoff. Without this, usage awareness depends on the model remembering to read usage at its checkpoints, and the terminal CLI has no usage tool at all. This optional layer adds a hook that does the watching, using the usage numbers the terminal CLI passes to the status line command. Two small Node scripts (Node.js is required for this layer), no dependencies. Everything in respawn still works without them, and without them respawn writes no files.
 
-**Honest caveat:** in a 5-minute test the Claude desktop app's Code tab did not run the status line command, so this layer most likely works only in the terminal `claude` CLI. In the desktop app the skill's own `get_usage` checkpoints stay the mechanism. The scripts are covered by unit tests on fixture data; they have not yet been seen working in a live terminal session.
+**Honest caveat:** in a 5-minute test the Claude desktop app's Code tab did not run the status line command, so this layer most likely works only in the terminal `claude` CLI. In the desktop app the skill's own `get_usage` checkpoints stay the mechanism. The scripts are covered by unit tests on fixture data and worked in two short live terminal sessions (a usage note at the crossing, a disarm, a soft-stop pause with its resume job); they have not yet been through a real usage-limit cutoff.
 
 How it fits together:
 
@@ -104,7 +104,7 @@ Setup:
 2. Copy the tap somewhere stable (the plugin folder changes with each version), pinned to the release you installed:
 
    ```bash
-   mkdir -p ~/.claude/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/v0.4.0/scripts/respawn-tap.js -o ~/.claude/respawn/respawn-tap.js
+   mkdir -p ~/.claude/respawn && curl -fsSL https://raw.githubusercontent.com/ruben-sj/respawn-skill/v0.4.1/scripts/respawn-tap.js -o ~/.claude/respawn/respawn-tap.js
    ```
 
 3. Change the `statusLine` entry in your `~/.claude/settings.json` by hand. Plugins cannot set `statusLine`, so this step is always manual. Pass your existing status line command as **one quoted string**:
@@ -172,9 +172,9 @@ Still unverified:
 
 ## Roadmap
 
-- **v0.3.0:** released once it has survived a real usage-limit cutoff.
-- **v0.4.0 (in development):** plugin packaging and the optional usage hook. Next step is a live terminal test, starting with checking that the session id is the same in the status line input, the hook input and the skill.
-- **Later:** a first-party way to read usage from hooks or from the desktop app, if one appears; 1.0.0 once the behavior has settled.
+- **v0.4.1 (in testing):** plugin packaging, the optional usage hook for the terminal CLI (experimental), and the fix for runaway checks. Released after a full eval run and an overnight idle field test.
+- **Next:** the hook layer through a real cutoff, then timed checks from the tap's reset time in classic mode.
+- **Later:** an opt-in reminder that suggests arming respawn in heavy sessions; a first-party way to read usage from hooks or from the desktop app, if one appears; 1.0.0 once the behavior has settled through real cutoffs.
 
 ## Contributing
 
