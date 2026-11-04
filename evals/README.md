@@ -15,7 +15,7 @@ The graders in `graders/` are mostly free `regex` checks on that answer (the log
 | :- | :- |
 | `cutoff/` | usage-limit error; trailing tool result 30+ min old; user interruption (not a cutoff); app message asking for visible output (looked past) |
 | `idle/` | disarm after 5.5 h of poll log lines; `windows=0` uses 24 h; disarm before roll-over in usage mode; no disarm when a cutoff is unhandled, a follow-up is pending, or a soft-stop note waits |
-| `rollover/` | below the backstop level (delete it, next calendar day); at it with `stop=70` (create the backstop first); `stop=off` uses 70 and a reset that would land on :30; skipped when a later timed job is listed |
+| `rollover/` | below the backstop level (delete it, next calendar day); at it with `stop=70` (create the backstop first); `stop=off` uses 70 and a reset that would land on :30; skipped when a later timed job is listed; not skipped when CronList lists the firing job itself |
 | `softstop/` | backstop firing during a pause writes only `paused` |
 | `followup/` | lost follow-up: the backstop ends the run and resumes the work |
 | `classic/` | classic timed firing schedules the 15-minute recheck |
@@ -30,7 +30,7 @@ Every run is a real model call on your account. From the plugin root:
 claude plugin eval . --tag smoke --runs 1 --ablation none --no-publish
 ```
 
-Full suite (17 cases, 3 runs each, about 51 agent runs plus 3 judge calls per run of the one `llm` grader):
+Full suite (18 cases, 3 runs each, about 54 agent runs plus 3 judge calls per run of the one `llm` grader):
 
 ```bash
 claude plugin eval . --ablation none --no-publish
